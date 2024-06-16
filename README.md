@@ -8,8 +8,8 @@ This is very much inspired by [discordia](https://github.com/SinisterRectus/Disc
 ## Features
 - [x] Gateway API 
 - [x] REST API
-- [o] Webhook API
-- [o] Slash Commands
-- [o] Interaction Events
-- [o] Voice API
-- [o] Sharding
+- [ ] Webhook API
+- [ ] Slash Commands
+- [ ] Interaction Events
+- [ ] Voice API
+- [ ] Sharding
