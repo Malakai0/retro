@@ -6,44 +6,12 @@
 ]]
 
 local Cache = require("Cache")
+local Interface = require("Interface")
+local Types = require("Types")
 
-local User = require("User")
-local Role = require("Role")
-
-type MemberMeta = {
-	__index: MemberMeta,
-}
-
-export type Member = typeof(setmetatable(
-	{} :: {
-		Id: string,
-		GuildId: string,
-		Nickname: string?,
-		Roles: { Role.Role },
-		JoinedAt: string,
-		PremiumSince: string?,
-		Deaf: boolean,
-		Mute: boolean,
-		Flags: number?,
-		Pending: boolean,
-		Permissions: string,
-		User: User.User,
-	},
-	{} :: MemberMeta
-))
-
-export type MemberPayload = {
-	user: User.UserPayload,
-	nick: string?,
-	roles: { string },
-	joined_at: string,
-	premium_since: string?,
-	deaf: boolean,
-	mute: boolean,
-	pending: boolean,
-	permissions: string,
-	flags: number,
-}
+type MemberMeta = Types.MemberMeta
+type Member = Types.Member
+type MemberPayload = Types.MemberPayload
 
 local function keyed(guildId: string, memberId: string): string
 	return `{guildId}-{memberId}`
@@ -53,16 +21,16 @@ local Member = {}
 local MemberInstance = {} :: MemberMeta
 MemberInstance.__index = MemberInstance
 
-function Member.get(guildId: string, memberId: string): Member?
+function Interface.GetMember(guildId: string, memberId: string): Member?
 	local fromCache = Cache.Member:Get(keyed(guildId, memberId))
 	if not fromCache and Cache.API then
-		local member = Cache.API:GetGuildMember(guildId, memberId)
-		return Member.new(guildId, member)
+		local member: Types.MemberPayload = Cache.API:GetGuildMember(guildId, memberId)
+		return Interface.CreateMember(guildId, member)
 	end
 	return fromCache
 end
 
-function Member.new(guildId: string, payload: MemberPayload): Member
+function Interface.CreateMember(guildId: string, payload: MemberPayload): Member
 	local memberId = payload.user.id
 
 	local self = setmetatable({
@@ -77,19 +45,14 @@ function Member.new(guildId: string, payload: MemberPayload): Member
 		Flags = payload.flags,
 		Pending = payload.pending,
 		Permissions = payload.permissions,
-		User = User.new(payload.user),
+		User = Interface.CreateUser(payload.user),
 	}, MemberInstance) :: Member
 
-	for _, roleId in payload.roles do
-		local role = Cache.Role:Get(roleId)
-		if role then
-			table.insert(self.Roles, role)
-		else
-			print(`Role {roleId} not found in cache`)
-		end
-	end
-
 	Cache.Member:Set(keyed(guildId, memberId), self)
+
+	for _, roleId in payload.roles do
+		table.insert(self.Roles, Interface.GetRole(guildId, roleId))
+	end
 
 	return self
 end

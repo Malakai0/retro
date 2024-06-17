@@ -4,77 +4,12 @@
 ]]
 
 local Cache = require("Cache")
+local Interface = require("Interface")
+local Types = require("Types")
 
-local User = require("User")
-local Role = require("Role")
-local Channel = require("Channel")
-
-type MessageMeta = {
-	__index: MessageMeta,
-
-	Reply: (self: Message, content: string) -> (),
-}
-
-export type Message = typeof(setmetatable(
-	{} :: {
-		Id: string,
-		Channel: Channel.Channel,
-		User: User.User,
-		Content: string,
-		Timestamp: string,
-		EditedTimestamp: string?,
-		Tts: boolean,
-		MentionEveryone: boolean,
-		Mentions: { User.User },
-		MentionRoles: { Role.Role },
-		MentionChannels: { Channel.Channel },
-		Attachments: {},
-		Embeds: {},
-		Reactions: {},
-		Pinned: boolean,
-		WebhookId: string?,
-		Type: number,
-		Activity: {}?,
-		MessageReference: MessageReference?,
-	},
-	{} :: MessageMeta
-))
-
-export type MessageReference = {
-	MessageId: string,
-	ChannelId: string,
-	GuildId: string?,
-	FailIfNotExists: boolean?,
-}
-
-export type MessageReferencePayload = {
-	message_id: string,
-	channel_id: string,
-	guild_id: string?,
-	fail_if_not_exists: boolean?,
-}
-
-export type MessagePayload = {
-	id: string,
-	channel_id: string,
-	author: User.UserPayload,
-	content: string,
-	timestamp: string,
-	edited_timestamp: string?,
-	tts: boolean,
-	mention_everyone: boolean,
-	mentions: { User.UserPayload },
-	mention_roles: { string },
-	mention_channels: { Channel.ChannelMention }?,
-	attachments: {},
-	embeds: {},
-	reactions: {},
-	pinned: boolean,
-	webhook_id: string?,
-	type: number,
-	activity: {}?,
-	message_reference: MessageReferencePayload?,
-}
+type MessageMeta = Types.MessageMeta
+type Message = Types.Message
+type MessagePayload = Types.MessagePayload
 
 local Message = {}
 local MessageInstance = {} :: MessageMeta
@@ -84,29 +19,27 @@ local function keyed(channelId: string, messageId: string): string
 	return `{channelId}:{messageId}`
 end
 
-function Message.get(channelId: string, messageId: string, raw: boolean?): Message?
+function Interface.GetMessage(channelId: string, messageId: string, raw: boolean?): Message?
 	local cacheKey = keyed(channelId, messageId)
 
 	local fromCache = Cache.Message:Get(cacheKey)
 	if not fromCache and Cache.API and not raw then
-		local messagePayload = Cache.API:GetMessage(channelId, messageId)
+		local messagePayload: Types.MessagePayload = Cache.API:GetMessage(channelId, messageId)
 		if messagePayload then
-			return Message.new(messagePayload)
+			return Interface.CreateMessage(messagePayload)
 		end
 	end
 	return fromCache
 end
 
-function Message.new(payload: MessagePayload): Message
-	local channel = Channel.get(payload.channel_id)
-	assert(channel, "Channel not found")
-
+function Interface.CreateMessage(payload: MessagePayload): Message
 	local cacheKey = keyed(payload.channel_id, payload.id)
 
 	local self = setmetatable({
 		Id = payload.id,
-		Channel = channel,
-		User = User.new(payload.author),
+		Guild = Interface.GetGuild(payload.guild_id, true),
+		Channel = Interface.GetChannel(payload.channel_id, true),
+		User = Interface.GetUser(payload.author.id, true),
 		Content = payload.content,
 		Timestamp = payload.timestamp,
 		EditedTimestamp = payload.edited_timestamp,
@@ -132,26 +65,43 @@ function Message.new(payload: MessagePayload): Message
 			else nil,
 	}, MessageInstance) :: Message
 
+	Cache.Message:Set(cacheKey, self)
+
 	for _, mention in payload.mentions do
-		table.insert(self.Mentions, User.get(mention.id))
+		table.insert(self.Mentions, Interface.GetUser(mention.id))
 	end
 
 	for _, mention in payload.mention_roles do
-		table.insert(self.MentionRoles, Role.get(mention))
+		table.insert(self.MentionRoles, Interface.GetRole(self.Guild.Id, mention))
 	end
 
 	if payload.mention_channels then
 		for _, mention in payload.mention_channels do
-			table.insert(self.MentionChannels, Channel.fromChannelMention(mention))
+			table.insert(self.MentionChannels, Interface.GetChannel(mention.id))
 		end
 	end
 
-	Cache.Message:Set(cacheKey, self)
+	if not self.User then
+		self.User = Interface.CreateUser(payload.author)
+	end
+
+	if not self.Channel then
+		self.Channel = Interface.GetChannel(payload.channel_id)
+	end
+
+	if not self.Guild then
+		self.Guild = Interface.GetGuild(payload.guild_id)
+	end
 
 	return self
 end
 
 function MessageInstance:Reply(content: string): ()
+	if not self.Channel then
+		print(`Cannot reply to message {self.Id} as channel is not found`)
+		return
+	end
+
 	Cache.API:PostMessage(self.Channel.Id, {
 		content = content,
 		message_reference = {

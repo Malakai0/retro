@@ -4,121 +4,30 @@
 ]]
 
 local Cache = require("Cache")
+local Interface = require("Interface")
+local Types = require("Types")
 
-local Channel = require("Channel")
-local Member = require("Member")
-local Role = require("Role")
-
-type GuildMeta = {
-	__index: GuildMeta,
-
-	GetIconURL: (self: Guild, size: number?, format: string?) -> string,
-}
-
-export type Guild = typeof(setmetatable(
-	{} :: {
-		Id: string,
-		Name: string,
-		Icon: string?,
-		OwnerId: string,
-		Permissions: string,
-		Region: string,
-		AfkChannelId: string?,
-		AfkTimeout: number,
-		EmbedEnabled: boolean,
-		EmbedChannelId: string?,
-		VerificationLevel: number,
-		DefaultMessageNotifications: number,
-		ExplicitContentFilter: number,
-		Roles: { Role.RolePayload },
-		MfaLevel: number,
-		ApplicationId: string?,
-		WidgetEnabled: boolean,
-		WidgetChannelId: string?,
-		SystemChannelId: string?,
-		SystemChannelFlags: number,
-		RulesChannelId: string?,
-		JoinedAt: string,
-		Large: boolean,
-		Unavailable: boolean,
-		MemberCount: number,
-		VoiceStates: {},
-		Members: { Member.Member },
-		Channels: { Channel.Channel },
-		Presences: {},
-		MaxPresences: number?,
-		MaxMembers: number,
-		VanityUrlCode: string?,
-		Description: string?,
-		Banner: string?,
-		PremiumTier: number,
-		PreferredLocale: string,
-		NSFWLevel: number,
-		Stickers: {},
-	},
-	{} :: GuildMeta
-))
-
-type GuildPayload = {
-	id: string,
-	name: string,
-	icon: string?,
-	owner_id: string,
-	permissions: string,
-	region: string,
-	afk_channel_id: string?,
-	afk_timeout: number,
-	embed_enabled: boolean,
-	embed_channel_id: string?,
-	verification_level: number,
-	default_message_notifications: number,
-	explicit_content_filter: number,
-	roles: { Role.RolePayload },
-	mfa_level: number,
-	application_id: string?,
-	widget_enabled: boolean,
-	widget_channel_id: string?,
-	system_channel_id: string?,
-	system_channel_flags: number,
-	rules_channel_id: string?,
-	joined_at: string,
-	large: boolean,
-	unavailable: boolean,
-	member_count: number,
-	voice_states: {},
-	presences: {},
-	max_presences: number?,
-	max_members: number,
-	vanity_url_code: string?,
-	description: string?,
-	banner: string?,
-	premium_tier: number,
-	preferred_locale: string,
-	nsfw_level: number,
-	stickers: {},
-}
-
-type UnavailableGuildPayload = {
-	id: string,
-	unavailable: boolean,
-}
+type GuildMeta = Types.GuildMeta
+type Guild = Types.Guild
+type GuildPayload = Types.GuildPayload
+type UnavailableGuildPayload = Types.UnavailableGuildPayload
 
 local Guild = {}
 local GuildInstance = {} :: GuildMeta
 GuildInstance.__index = GuildInstance
 
-function Guild.get(guildId: string): Guild?
+function Interface.GetGuild(guildId: string, raw: boolean?): Guild?
 	local fromCache = Cache.Guild:Get(guildId)
-	if (not fromCache or fromCache.Unavailable) and Cache.API then
+	if (not fromCache or fromCache.Unavailable) and Cache.API and not raw then
 		local guildPayload = Cache.API:GetGuild(guildId)
 		if guildPayload then
-			return Guild.new(guildPayload)
+			return Interface.CreateGuild(guildPayload)
 		end
 	end
 	return fromCache
 end
 
-function Guild.new(payload: GuildPayload): Guild
+function Interface.CreateGuild(payload: GuildPayload): Guild
 	local self = setmetatable({
 		Id = payload.id,
 		Name = payload.name,
@@ -161,30 +70,30 @@ function Guild.new(payload: GuildPayload): Guild
 		Channels = {},
 	}, GuildInstance)
 
+	Cache.Guild:Set(payload.id, self)
+
 	for _, rolePayload in payload.roles do
-		local role = Role.get(rolePayload.id) or Role.new(rolePayload)
+		local role = Interface.GetRole(self.Id, rolePayload.id, true) or Interface.CreateRole(self.Id, rolePayload)
 		self.Roles[role.Id] = role
 	end
 
-	local members = Cache.API:GetGuildMembers(payload.id)
-	local channels = Cache.API:GetGuildChannels(payload.id)
+	local members: { Types.MemberPayload } = Cache.API:GetGuildMembers(payload.id)
+	local channels: { Types.ChannelPayload } = Cache.API:GetGuildChannels(payload.id)
 
 	for _, memberPayload in members do
-		local member = Member.get(payload.id, memberPayload.user.id)
+		local member = Interface.GetMember(self.Id, memberPayload.user.id)
 		self.Members[member.Id] = member
 	end
 
 	for _, channelPayload in channels do
-		local channel = Channel.get(channelPayload.id)
+		local channel = Interface.GetChannel(channelPayload.id)
 		self.Channels[channel.Id] = channel
 	end
-
-	Cache.Guild:Set(payload.id, self)
 
 	return self
 end
 
-function Guild.newUnavailable(payload: UnavailableGuildPayload): Guild
+function Interface.CreateUnavailableGuild(payload: UnavailableGuildPayload): Guild
 	local self = setmetatable({
 		Id = payload.id,
 		Unavailable = payload.unavailable,

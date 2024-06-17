@@ -1,6 +1,8 @@
 local serde = require("@lune/serde")
 local net = require("@lune/net")
 
+local Types = require("Containers/Types")
+
 local routes = {
 	GET_APPLICATION = "/applications/%s",
 	GET_APPLICATION_BRANCHES = "/applications/%s/branches",
@@ -80,16 +82,16 @@ type APIMeta = {
 
 	Request: (self: API, method: string, route: string, body: any?) -> any,
 
-	GetGuild: (self: API, guildId: string) -> any,
-	GetGuildMember: (self: API, guildId: string, memberId: string) -> any,
-	GetGuildMembers: (self: API, guildId: string) -> any,
-	GetGuildRoles: (self: API, guildId: string) -> any,
-	GetGuildChannels: (self: API, guildId: string) -> any,
+	GetGuild: (self: API, guildId: string) -> Types.GuildPayload?,
+	GetGuildMember: (self: API, guildId: string, memberId: string) -> Types.MemberPayload?,
+	GetGuildMembers: (self: API, guildId: string) -> { Types.MemberPayload }?,
+	GetGuildRoles: (self: API, guildId: string) -> { Types.RolePayload }?,
+	GetGuildChannels: (self: API, guildId: string) -> { Types.ChannelPayload }?,
 
-	GetChannel: (self: API, channelId: string) -> any,
-	GetMessage: (self: API, channelId: string, messageId: string) -> any,
+	GetChannel: (self: API, channelId: string) -> Types.ChannelPayload?,
+	GetMessage: (self: API, channelId: string, messageId: string) -> Types.MessagePayload?,
 
-	GetUser: (self: API, userId: string) -> any,
+	GetUser: (self: API, userId: string) -> Types.UserPayload?,
 
 	PostMessage: (self: API, channelId: string, message: any) -> (),
 }
@@ -129,35 +131,35 @@ function APIInstance:Request(method: string, route: string, body: any?): any
 	error(`{response.statusCode}: {response.statusMessage}`)
 end
 
-function APIInstance:GetGuild(guildId: string): any
+function APIInstance:GetGuild(guildId: string): Types.GuildPayload?
 	return self:Request("GET", routes.GET_GUILD:format(guildId))
 end
 
-function APIInstance:GetGuildMember(guildId: string, memberId: string): any
+function APIInstance:GetGuildMember(guildId: string, memberId: string): Types.MemberPayload?
 	return self:Request("GET", routes.GET_GUILD_MEMBER_BY_USER_ID:format(guildId, memberId))
 end
 
-function APIInstance:GetGuildMembers(guildId: string): any
+function APIInstance:GetGuildMembers(guildId: string): { Types.MemberPayload }?
 	return self:Request("GET", routes.GET_GUILD_MEMBERS:format(guildId))
 end
 
-function APIInstance:GetGuildRoles(guildId: string): any
+function APIInstance:GetGuildRoles(guildId: string): { Types.RolePayload }?
 	return self:Request("GET", routes.GET_GUILD_ROLES:format(guildId))
 end
 
-function APIInstance:GetGuildChannels(guildId: string): any
+function APIInstance:GetGuildChannels(guildId: string): { Types.ChannelPayload }?
 	return self:Request("GET", routes.GET_GUILD_CHANNELS:format(guildId))
 end
 
-function APIInstance:GetChannel(channelId: string): any
+function APIInstance:GetChannel(channelId: string): Types.ChannelPayload?
 	return self:Request("GET", routes.GET_CHANNEL:format(channelId))
 end
 
-function APIInstance:GetMessage(channelId: string, messageId: string): any
+function APIInstance:GetMessage(channelId: string, messageId: string): Types.MessagePayload?
 	return self:Request("GET", routes.GET_CHANNEL_MESSAGE_BY_ID:format(channelId, messageId))
 end
 
-function APIInstance:GetUser(userId: string): any
+function APIInstance:GetUser(userId: string): Types.UserPayload?
 	return self:Request("GET", routes.GET_USER:format(userId))
 end
 

@@ -17,7 +17,7 @@ client.Events.MessageReceived:Connect(function(message: retro.Message)
 	if message.Content == "!ping" then
 		message:Reply("Pong!")
 	elseif message.Content == "!me" then
-		message:Reply(`You are \`{message.User:GetTag()}\``)
+		message:Reply(`You are \`{message.User:GetTag()}\`, welcome to \`{message.Guild.Name}\`!`)
 	end
 end)
 

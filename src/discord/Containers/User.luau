@@ -4,74 +4,29 @@
 ]]
 
 local Cache = require("Cache")
+local Interface = require("Interface")
+local Types = require("Types")
 
-export type AvatarDecorationData = {
-	Asset: string,
-	SkuId: string,
-}
-
-type UserMeta = {
-	__index: UserMeta,
-
-	GetAvatarURL: (self: User, size: number?, format: string?) -> string,
-	GetTag: (self: User) -> string,
-}
-
-export type User = typeof(setmetatable(
-	{} :: {
-		Id: string,
-		Username: string,
-		Discriminator: string,
-		DisplayName: string?,
-		Avatar: string?,
-		Bot: boolean?,
-		System: boolean?,
-		MfaEnabled: boolean?,
-		Locale: string?,
-		Verified: boolean?,
-		Email: string?,
-		Flags: number?,
-		PremiumType: number?,
-		PublicFlags: number?,
-		AvatarDecoration: AvatarDecorationData?,
-	},
-	{} :: UserMeta
-))
-
-export type UserPayload = {
-	id: string,
-	username: string,
-	discriminator: string,
-	global_name: string?,
-	avatar: string?,
-	bot: boolean?,
-	system: boolean?,
-	mfa_enabled: boolean?,
-	locale: string?,
-	verified: boolean?,
-	email: string?,
-	flags: number?,
-	premium_type: number?,
-	public_flags: number?,
-	avatar_decoration_data: AvatarDecorationData?,
-}
+type UserMeta = Types.UserMeta
+type User = Types.User
+type UserPayload = Types.UserPayload
 
 local User = {}
 local UserInstance = {} :: UserMeta
 UserInstance.__index = UserInstance
 
-function User.get(userId: string, raw: boolean?): User?
+function Interface.GetUser(userId: string, raw: boolean?): User?
 	local fromCache = Cache.User:Get(userId)
 	if not fromCache and Cache.API and not raw then
 		local userPayload = Cache.API:GetUser(userId)
 		if userPayload then
-			return User.new(userPayload)
+			return Interface.CreateUser(userPayload)
 		end
 	end
 	return fromCache
 end
 
-function User.new(payload: UserPayload)
+function Interface.CreateUser(payload: UserPayload)
 	local self = setmetatable({
 		Id = payload.id,
 		Username = payload.username,

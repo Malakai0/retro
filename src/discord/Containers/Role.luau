@@ -4,62 +4,40 @@
 ]]
 
 local Cache = require("Cache")
+local Interface = require("Interface")
+local Types = require("Types")
 
-type RoleMeta = {
-	__index: RoleMeta,
-}
-
-export type Role = typeof(setmetatable(
-	{} :: {
-		Id: string,
-		Name: string,
-		Color: number,
-		Hoist: boolean,
-		Position: number,
-		Permissions: string,
-		Managed: boolean,
-		Mentionable: boolean,
-		Tags: { RoleTag },
-	},
-	{} :: RoleMeta
-))
-
-export type RoleTag = {
-	BotId: string?,
-	IntegrationId: string?,
-	PremiumSubscriber: boolean?,
-}
-
-export type RolePayload = {
-	id: string,
-	name: string,
-	color: number,
-	hoist: boolean,
-	icon: string?,
-	unicode_emoji: string?,
-	position: number,
-	permissions: string,
-	managed: boolean,
-	mentionable: boolean,
-	tags: { RoleTagsPayload }?,
-	flags: number,
-}
-
-export type RoleTagsPayload = {
-	bot_id: string?,
-	integration_id: string?,
-	premium_subscriber: boolean?,
-}
+type RoleMeta = Types.RoleMeta
+type Role = Types.Role
+type RolePayload = Types.RolePayload
+type RoleTag = Types.RoleTag
 
 local Role = {}
 local RoleInstance = {} :: RoleMeta
 RoleInstance.__index = RoleInstance
 
-function Role.get(roleId: string): Role?
-	return Cache.Role:Get(roleId)
+local function keyed(guildId: string, roleId: string): string
+	return `{guildId}:{roleId}`
 end
 
-function Role.new(payload: RolePayload)
+function Interface.GetRole(guildId: string, roleId: string, raw: boolean?): Role?
+	local cacheKey = keyed(guildId, roleId)
+
+	local fromCache = Cache.Role:Get(cacheKey)
+	if not fromCache and Cache.API and not raw then
+		local rolesPayload = Cache.API:GetGuildRoles(guildId)
+		if not rolesPayload then
+			return
+		end
+		for _, rolePayload in rolesPayload do
+			Interface.CreateRole(guildId, rolePayload)
+		end
+		fromCache = Cache.Role:Get(cacheKey)
+	end
+	return fromCache
+end
+
+function Interface.CreateRole(guildId: string, payload: RolePayload): Role
 	local roleTags: { RoleTag } = {}
 	if payload.tags then
 		for _, tag in payload.tags do
@@ -73,6 +51,7 @@ function Role.new(payload: RolePayload)
 
 	local self = setmetatable({
 		Id = payload.id,
+		Guild = Interface.GetGuild(guildId),
 		Name = payload.name,
 		Color = payload.color,
 		Hoist = payload.hoist,
@@ -83,7 +62,7 @@ function Role.new(payload: RolePayload)
 		Tags = roleTags,
 	}, RoleInstance) :: Role
 
-	Cache.Role:Set(payload.id, self)
+	Cache.Role:Set(keyed(guildId, payload.id), self)
 
 	return self
 end

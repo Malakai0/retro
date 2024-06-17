@@ -1,9 +1,8 @@
 local Signal = require("../../lib/Signal")
 local Gateway = require("../Gateway")
 
-local User = require("../Containers/User")
-local Guild = require("../Containers/Guild")
-local Message = require("../Containers/Message")
+local Types = require("../Containers/Types")
+local Interface = require("../Containers/Interface")
 
 local SharedType = require("SharedType")
 
@@ -14,9 +13,8 @@ type EventsMeta = {
 export type Events = typeof(setmetatable(
 	{} :: {
 		Ready: Signal.Signal<SharedType.Ready>,
-
-		GuildCreate: Signal.Signal<Guild.Guild>,
-		MessageReceived: Signal.Signal<Message.Message>,
+		GuildCreate: Signal.Signal<Types.Guild>,
+		MessageReceived: Signal.Signal<Types.Message>,
 	},
 	{} :: EventsMeta
 ))
@@ -28,7 +26,6 @@ EventsInstance.__index = EventsInstance
 function Events.new(messageSignal: Signal.Signal<Gateway.DiscordGatewayPayload>)
 	local self = setmetatable({
 		Ready = Signal.new(),
-
 		GuildCreate = Signal.new(),
 		MessageReceived = Signal.new(),
 	}, EventsInstance) :: Events
@@ -41,25 +38,25 @@ function Events.new(messageSignal: Signal.Signal<Gateway.DiscordGatewayPayload>)
 				Shard = payload.d.shard,
 			} :: SharedType.Ready
 
-			event.User = User.new(payload.d.user)
+			event.User = Interface.CreateUser(payload.d.user)
 			event.Guilds = {}
 
 			for _, guild in payload.d.guilds do
-				table.insert(event.Guilds, Guild.newUnavailable(guild))
+				table.insert(event.Guilds, Interface.CreateUnavailableGuild(guild))
 			end
 
 			self.Ready:Fire(event)
 		elseif payload.t == "GUILD_CREATE" then
-			local existingGuild = Guild.get(payload.d.id)
+			local existingGuild = Interface.GetGuild(payload.d.id, true)
 			if not existingGuild or existingGuild.Unavailable then
-				existingGuild = Guild.new(payload.d)
+				existingGuild = Interface.CreateGuild(payload.d)
 			end
 
 			self.GuildCreate:Fire(existingGuild)
 		elseif payload.t == "MESSAGE_CREATE" then
-			local existingMessage = Message.get(payload.d.channel_id, payload.d.id, true)
+			local existingMessage = Interface.GetMessage(payload.d.channel_id, payload.d.id, true)
 			if not existingMessage then
-				existingMessage = Message.new(payload.d)
+				existingMessage = Interface.CreateMessage(payload.d)
 			end
 
 			self.MessageReceived:Fire(existingMessage)
